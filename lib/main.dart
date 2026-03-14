@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'services/geofence_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Discover Libraries',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -28,9 +30,9 @@ class MyApp extends StatelessWidget {
         //
         // This works for code too, not just values: Most code changes can be
         // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Discover Libraries'),
     );
   }
 }
@@ -54,17 +56,75 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  final GeofenceService _geofenceService = GeofenceService();
+  bool _geofencesEnabled = false;
+  bool _isLoading = false;
+  String _statusMessage = 'Geofences are disabled';
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _checkGeofenceStatus();
+  }
+
+  Future<void> _checkGeofenceStatus() async {
+    await _geofenceService.initialize();
+    final ids = await _geofenceService.getActiveGeofenceIds();
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _geofencesEnabled = ids.isNotEmpty;
+      _statusMessage = _geofencesEnabled
+          ? 'Geofences enabled (${ids.length} active)'
+          : 'Geofences are disabled';
     });
+  }
+
+  Future<void> _toggleGeofences() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final enabled = await _geofenceService.toggleGeofences();
+      setState(() {
+        _geofencesEnabled = enabled;
+        _statusMessage = enabled
+            ? 'Geofences enabled successfully!'
+            : 'Geofences disabled';
+      });
+    } on GeofencePermissionDeniedException catch (e) {
+      setState(() => _statusMessage = e.message);
+      _showPermissionDialog();
+    } catch (e) {
+      setState(() => _statusMessage = 'Error: ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Permission Required'),
+        content: const Text(
+          'To use geofencing, this app needs "Always" location permission. '
+          'This allows the app to notify you when you\'re near a library, '
+          'even when the app is closed.\n\n'
+          'Please go to Settings and grant location permission.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -102,20 +162,50 @@ class _MyHomePageState extends State<MyHomePage> {
           // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
           // action in the IDE, or press "p" in the console), to see the
           // wireframe for each widget.
-          mainAxisAlignment: .center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
+            Icon(
+              _geofencesEnabled ? Icons.location_on : Icons.location_off,
+              size: 80,
+              color: _geofencesEnabled ? Colors.green : Colors.grey,
+            ),
+            const SizedBox(height: 24),
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              _statusMessage,
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton.icon(
+                    onPressed: _toggleGeofences,
+                    icon: Icon(
+                      _geofencesEnabled
+                          ? Icons.notifications_off
+                          : Icons.notifications_active,
+                    ),
+                    label: Text(
+                      _geofencesEnabled
+                          ? 'Disable Geofences'
+                          : 'Enable Geofences',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+            const SizedBox(height: 24),
+            const Text(
+              'When enabled, you\'ll receive notifications\n'
+              'when you\'re near a library.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
