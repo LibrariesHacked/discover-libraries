@@ -1,5 +1,9 @@
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:native_geofence/native_geofence.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import 'library_data_service.dart';
 
 /// Service to handle geofence operations and permissions
 class GeofenceService {
@@ -44,61 +48,98 @@ class GeofenceService {
     return await Permission.locationAlways.status;
   }
 
-  /// Create sample geofences for testing
+  /// Create geofences for the 19 nearest libraries to the current location
   Future<void> createGeofences() async {
-    // Example geofence - British Library, London
-    final britishLibrary = Geofence(
-      id: 'british_library',
-      location: Location(
-        latitude: 51.5299,
-        longitude: -0.1277,
-      ),
-      radiusMeters: 200,
-      triggers: {
-        GeofenceEvent.enter,
-        GeofenceEvent.exit,
-      },
-      iosSettings: IosGeofenceSettings(
-        initialTrigger: true,
-      ),
-      androidSettings: AndroidGeofenceSettings(
-        initialTriggers: {GeofenceEvent.enter},
-        notificationResponsiveness: const Duration(minutes: 5),
-        loiteringDelay: const Duration(minutes: 1),
-      ),
-    );
+    final position = await Geolocator.getCurrentPosition();
+    final libraries = await LibraryDataService().getLibraries();
 
-    // Example geofence - Birmingham Library
-    final birminghamLibrary = Geofence(
-      id: 'birmingham_library',
-      location: Location(
-        latitude: 52.4797,
-        longitude: -1.9061,
-      ),
-      radiusMeters: 200,
-      triggers: {
-        GeofenceEvent.enter,
-        GeofenceEvent.exit,
-      },
-      iosSettings: IosGeofenceSettings(
-        initialTrigger: true,
-      ),
-      androidSettings: AndroidGeofenceSettings(
-        initialTriggers: {GeofenceEvent.enter},
-        notificationResponsiveness: const Duration(minutes: 5),
-        loiteringDelay: const Duration(minutes: 1),
-      ),
+    if (libraries.isEmpty) {
+      throw Exception('No library data available.');
+    }
+
+    // Sort by distance from current location and take the 19 nearest
+    final sorted = List.of(libraries)
+      ..sort((a, b) {
+        final distA = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          a.latitude,
+          a.longitude,
+        );
+        final distB = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          b.latitude,
+          b.longitude,
+        );
+        return distA.compareTo(distB);
+      });
+
+    final nearest = sorted.take(19).toList();
+
+    // Calculate the distance to the furthest of the 19 nearest libraries
+    final furthestLibrary = nearest.last;
+    final furthestDistance = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      furthestLibrary.latitude,
+      furthestLibrary.longitude,
     );
 
     try {
-      await NativeGeofenceManager.instance.createGeofence(
-        britishLibrary,
-        geofenceCallback,
+      for (final library in nearest) {
+        final geofence = Geofence(
+          id: 'library_${library.id}',
+          location: Location(
+            latitude: library.latitude,
+            longitude: library.longitude,
+          ),
+          radiusMeters: 150,
+          triggers: {
+            GeofenceEvent.enter,
+          },
+          iosSettings: IosGeofenceSettings(
+            initialTrigger: true,
+          ),
+          androidSettings: AndroidGeofenceSettings(
+            initialTriggers: {GeofenceEvent.enter},
+            notificationResponsiveness: const Duration(minutes: 5),
+            loiteringDelay: const Duration(minutes: 1),
+          ),
+        );
+
+        await NativeGeofenceManager.instance.createGeofence(
+          geofence,
+          libraryGeofenceCallback,
+        );
+      }
+
+      // Overall boundary geofence: Triggers exit when user leaves the area
+      final boundaryGeofence = Geofence(
+        id: 'boundary_geofence',
+        location: Location(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        ),
+        radiusMeters: furthestDistance,
+        triggers: {
+          GeofenceEvent.exit,
+        },
+        iosSettings: IosGeofenceSettings(
+          initialTrigger: false,
+        ),
+        androidSettings: AndroidGeofenceSettings(
+          initialTriggers: {},
+          notificationResponsiveness: const Duration(minutes: 5),
+          loiteringDelay: const Duration(minutes: 1),
+        ),
       );
+
       await NativeGeofenceManager.instance.createGeofence(
-        birminghamLibrary,
-        geofenceCallback,
+        boundaryGeofence,
+        boundaryGeofenceCallback,
       );
+
       _geofencesEnabled = true;
     } catch (e) {
       _geofencesEnabled = false;
@@ -150,13 +191,47 @@ class GeofencePermissionDeniedException implements Exception {
   String toString() => message;
 }
 
-/// Callback function for geofence events
+/// Callback function for library geofence enter events
 /// This must be a top-level function
 @pragma('vm:entry-point')
-Future<void> geofenceCallback(GeofenceCallbackParams params) async {
-  // Handle the geofence event
-  // In a real app, you might show a notification or update app state
-  print('Geofence triggered: ${params.geofences.map((g) => g.id).join(", ")}');
-  print('Event: ${params.event}');
-  print('Location: ${params.location?.latitude}, ${params.location?.longitude}');
+Future<void> libraryGeofenceCallback(GeofenceCallbackParams params) async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ),
+  );
+
+  for (final geofence in params.geofences) {
+    final isEnter = params.event == GeofenceEvent.enter;
+    final title = isEnter ? 'Library Nearby' : 'Leaving Library Area';
+    final body = isEnter
+        ? 'You are near a library!'
+        : 'You have left a library area.';
+
+    await plugin.show(
+      geofence.id.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'geofence_channel',
+          'Geofence Notifications',
+          channelDescription: 'Notifications for library geofence events',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
+}
+
+/// Callback function for boundary geofence exit events
+/// Clears and refreshes all geofences when the user leaves the monitored area
+@pragma('vm:entry-point')
+Future<void> boundaryGeofenceCallback(GeofenceCallbackParams params) async {
+  await GeofenceService().removeAllGeofences();
+  await GeofenceService().createGeofences();
 }
