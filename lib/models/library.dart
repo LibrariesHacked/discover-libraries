@@ -50,30 +50,35 @@ class Library {
   });
 
   factory Library.fromJson(Map<String, dynamic> json) {
+    if (json['id'] == null || json['name'] == null ||
+        json['latitude'] == null || json['longitude'] == null) {
+      throw FormatException('Missing required fields in library JSON');
+    }
+
     return Library(
       id: json['id'] as int,
       name: json['name'] as String,
-      addressLine1: json['addressLine1'] as String,
-      addressLine2: json['addressLine2'] as String,
-      addressLine3: json['addressLine3'] as String,
-      postcode: json['postcode'] as String,
+      addressLine1: json['addressLine1'] as String? ?? '',
+      addressLine2: json['addressLine2'] as String? ?? '',
+      addressLine3: json['addressLine3'] as String? ?? '',
+      postcode: json['postcode'] as String? ?? '',
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
-      websiteUrl: json['websiteUrl'] as String,
-      mondayStaffedHours: json['mondayStaffedHours'] as String,
-      mondayUnstaffedHours: json['mondayUnstaffedHours'] as String,
-      tuesdayStaffedHours: json['tuesdayStaffedHours'] as String,
-      tuesdayUnstaffedHours: json['tuesdayUnstaffedHours'] as String,
-      wednesdayStaffedHours: json['wednesdayStaffedHours'] as String,
-      wednesdayUnstaffedHours: json['wednesdayUnstaffedHours'] as String,
-      thursdayStaffedHours: json['thursdayStaffedHours'] as String,
-      thursdayUnstaffedHours: json['thursdayUnstaffedHours'] as String,
-      fridayStaffedHours: json['fridayStaffedHours'] as String,
-      fridayUnstaffedHours: json['fridayUnstaffedHours'] as String,
-      saturdayStaffedHours: json['saturdayStaffedHours'] as String,
-      saturdayUnstaffedHours: json['saturdayUnstaffedHours'] as String,
-      sundayStaffedHours: json['sundayStaffedHours'] as String,
-      sundayUnstaffedHours: json['sundayUnstaffedHours'] as String,
+      websiteUrl: json['websiteUrl'] as String? ?? '',
+      mondayStaffedHours: json['mondayStaffedHours'] as String? ?? '',
+      mondayUnstaffedHours: json['mondayUnstaffedHours'] as String? ?? '',
+      tuesdayStaffedHours: json['tuesdayStaffedHours'] as String? ?? '',
+      tuesdayUnstaffedHours: json['tuesdayUnstaffedHours'] as String? ?? '',
+      wednesdayStaffedHours: json['wednesdayStaffedHours'] as String? ?? '',
+      wednesdayUnstaffedHours: json['wednesdayUnstaffedHours'] as String? ?? '',
+      thursdayStaffedHours: json['thursdayStaffedHours'] as String? ?? '',
+      thursdayUnstaffedHours: json['thursdayUnstaffedHours'] as String? ?? '',
+      fridayStaffedHours: json['fridayStaffedHours'] as String? ?? '',
+      fridayUnstaffedHours: json['fridayUnstaffedHours'] as String? ?? '',
+      saturdayStaffedHours: json['saturdayStaffedHours'] as String? ?? '',
+      saturdayUnstaffedHours: json['saturdayUnstaffedHours'] as String? ?? '',
+      sundayStaffedHours: json['sundayStaffedHours'] as String? ?? '',
+      sundayUnstaffedHours: json['sundayUnstaffedHours'] as String? ?? '',
     );
   }
 

@@ -55,11 +55,17 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+const String kStatusEnabled = 'Library notifications on';
+const String kStatusDisabled = 'Library notifications off';
+
 class _MyHomePageState extends State<MyHomePage> {
   final GeofenceService _geofenceService = GeofenceService();
   bool _geofencesEnabled = false;
   bool _isLoading = false;
-  String _statusMessage = 'Geofences are disabled';
+  String? _errorMessage;
+
+  String get _statusMessage =>
+      _errorMessage ?? (_geofencesEnabled ? kStatusEnabled : kStatusDisabled);
 
   @override
   void initState() {
@@ -72,9 +78,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final ids = await _geofenceService.getActiveGeofenceIds();
     setState(() {
       _geofencesEnabled = ids.isNotEmpty;
-      _statusMessage = _geofencesEnabled
-          ? 'Geofences enabled (${ids.length} active)'
-          : 'Geofences are disabled';
+      _errorMessage = null;
     });
   }
 
@@ -85,15 +89,12 @@ class _MyHomePageState extends State<MyHomePage> {
       final enabled = await _geofenceService.toggleGeofences();
       setState(() {
         _geofencesEnabled = enabled;
-        _statusMessage = enabled
-            ? 'Geofences enabled successfully!'
-            : 'Geofences disabled';
+        _errorMessage = null;
       });
-    } on GeofencePermissionDeniedException catch (e) {
-      setState(() => _statusMessage = e.message);
+    } on GeofencePermissionDeniedException {
       _showPermissionDialog();
     } catch (e) {
-      setState(() => _statusMessage = 'Error: ${e.toString()}');
+      setState(() => _errorMessage = 'Error: ${e.toString()}');
     } finally {
       setState(() => _isLoading = false);
     }

@@ -53,9 +53,10 @@ class LibraryDataService {
     }
 
     final List<dynamic> jsonList = json.decode(response.body) as List<dynamic>;
-    return jsonList
+    final libraries = jsonList
         .map((item) => Library.fromJson(item as Map<String, dynamic>))
         .toList();
+    return libraries;
   }
 
   /// Save the library list to a local JSON cache file.
